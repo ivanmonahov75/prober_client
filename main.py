@@ -4,7 +4,7 @@ import cv2
 import time
 from multiprocessing import Process
 import numpy as np
-
+# hello there
 
 def gui():  # will be used for setting up a gui
     pass
