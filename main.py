@@ -1,20 +1,19 @@
 import multiprocessing
 import socket
 import sys
-import time
 from multiprocessing import Process
 import dearpygui.dearpygui as dpg
 import pygame
 import numpy as np
-
+import test
 import callbacks
 
 mots_state = True
 
 
-def gui(queue_img, queue_stop, queue_en, queue_cont):
+def gui(queue_stop, queue_img, axis_lc, arrows_lc, buttons_lc):
     def stop_proc():
-        queue_stop.put('test')
+        queue_stop.put('stop')
         pygame.quit()
         sys.exit(0)
 
@@ -25,7 +24,7 @@ def gui(queue_img, queue_stop, queue_en, queue_cont):
         default_font = dpg.add_font("ProggyClean.ttf", 25)
 
     dpg.bind_font(default_font)
-    width, heights, channels, data = dpg.load_image('img_def.jpg')
+    width, heights, channels, data = dpg.load_image('img_def1.jpg')
     with dpg.texture_registry():
         dpg.add_dynamic_texture(width, heights, data, tag='img')
 
@@ -35,28 +34,15 @@ def gui(queue_img, queue_stop, queue_en, queue_cont):
             dpg.draw_image("img", (0, 0), (1860, 1395), uv_min=(0, 0), uv_max=(1, 1))  # (1860, 1395)
 
     with dpg.window(tag='controls', label='Controls', pos=(1880, 0), width=680, height=1440, no_resize=True):
-        # menu (optional)
-        with dpg.menu_bar():
-            with dpg.menu(label="Config"):
-                dpg.add_menu_item(label="Suspend")
-                dpg.add_menu_item(label="Active")
 
-                with dpg.menu(label="Docked"):
-                    dpg.add_menu_item(label="Refuel")
-                    dpg.add_menu_item(label="Charging")
-                    dpg.add_menu_item(label="Pick-up")
-
-            with dpg.menu(label="Speed"):
-                dpg.add_menu_item(label="Slow")
-                dpg.add_menu_item(label="Standard")
-                dpg.add_menu_item(label="Full")
         # sliders for gyro and gamepad
         with dpg.group():
             dpg.add_slider_int(max_value=90, min_value=-90, label="Pitch", vertical=True, height=300, width=30,
                                pos=(325, 80), tag='pitch')
             dpg.add_slider_int(max_value=90, min_value=-90, label="Roll", pos=(120, 210), tag='roll')
 
-            dpg.add_button(label="Reset gyro position", pos=(200, 400))
+            dpg.add_button(label="Reset gyro position", pos=(80, 400))
+            dpg.add_button(label="Reset zero level", pos=(380, 400))
 
             dpg.add_slider_float(label='LY', width=30, height=220, pos=(170, 460), vertical=True, max_value=1,
                                  min_value=-1,
@@ -80,16 +66,27 @@ def gui(queue_img, queue_stop, queue_en, queue_cont):
             dpg.add_text(default_value='Motors disabled', tag="mots_state")
             dpg.add_text(default_value='Current speed mode: Minimum', tag='speed_mode')
             dpg.add_text(default_value='Current light mode: Low', tag='light_mode')
-            # IR_modes = {0: 'On', 1: 'Off'}
             dpg.add_text(default_value='IR light off', tag='ir')
-            # motors_modes = {0: 'On', 1: 'Off'}
-            # dpg.add_text(default_value=f'Battery status {84}%')
+            dpg.add_text(default_value='')
+            dpg.add_text(default_value='Battery status:')
+            dpg.add_text(default_value='Battery voltage:')
+            dpg.add_text(default_value='Onboard temperature:')
+            dpg.add_text(default_value='Water temperature:')
+            dpg.add_text(default_value='Pressure (KPa):')
+            dpg.add_text(default_value='Depth (meters):')
         with dpg.group(pos=(420, 750)):  # buttons
             dpg.add_button(label='Enable', callback=callbacks.change_connection)
             dpg.add_button(label="Turn off motors", tag='mots_on_off', callback=callbacks.mots_onoff)
             dpg.add_button(label="Change speed mode", callback=callbacks.change_speed)
             dpg.add_button(label="Change light mode", callback=callbacks.change_light)
-            dpg.add_button(label="Turn IR on", callback=callbacks.ir_onoff)
+            dpg.add_button(label="Turn IR on", callback=callbacks.ir_onoff, tag='ir_but')
+            dpg.add_text(default_value='')
+            dpg.add_text(default_value='69%')
+            dpg.add_text(default_value='16.3v')
+            dpg.add_text(default_value='23 °C')
+            dpg.add_text(default_value='18 °C')
+            dpg.add_text(default_value='143 KPa')
+            dpg.add_text(default_value='1.4 Meters')
 
     with dpg.window(tag='low_controls', label='Low controls', pos=(0, 1440), width=2560, height=160, no_resize=True):
         with dpg.group(horizontal=True):
@@ -99,48 +96,71 @@ def gui(queue_img, queue_stop, queue_en, queue_cont):
     dpg.setup_dearpygui()
     dpg.show_viewport()
     dpg.toggle_viewport_fullscreen()
-    temp_p = [0, 0]
+    old_arr = [0, 0]
     while dpg.is_dearpygui_running():
-        # img = open('img.jpg', 'wb')
-        # img.write(queue_img.get())
-        # img.close()
-        # width, heights, channels, data = dpg.load_image('img.jpg')
-        # dpg.set_value("img", data)
-        # temp = queue_cont.get()
-        #
-        # dpg.set_value('lx', temp[0])
-        # dpg.set_value('ly', -temp[1])
-        # dpg.set_value('dv', -temp[2])
-        # dpg.set_value('rx', temp[3])
-        # dpg.set_value('ry', -temp[4])
-        # dpg.set_value('uv', temp[5])
+        img = open('img_new.jpg', 'wb')
+
+        img.write(queue_img.get())
+        img.close()
+
+        try:
+            width, heights, channels, data = dpg.load_image('img_new.jpg')
+        except:
+            width, heights, channels, data = dpg.load_image('img_def1.jpg')
+        dpg.set_value("img", data)
+
+        if old_arr[0] == 0 and arrows_lc[0] == 1:
+            callbacks.change_light(None)
+        if old_arr[0] == 0 and arrows_lc[0] == -1:
+            callbacks.ir_onoff('ir_but')
+
+        if old_arr[1] == 0 and arrows_lc[1] == 1:
+            callbacks.upper_speed(None)
+        if old_arr[1] == 0 and arrows_lc[1] == -1:
+            callbacks.lower_speed(None)
+
+        old_arr[0] = arrows_lc[0]
+        old_arr[1] = arrows_lc[1]
+
+        dpg.set_value('lx', axis_lc[0])
+        dpg.set_value('ly', -axis_lc[1])
+        dpg.set_value('dv', -axis_lc[2])
+        dpg.set_value('rx', axis_lc[3])
+        dpg.set_value('ry', -axis_lc[4])
+        dpg.set_value('uv', axis_lc[5])
+        dpg.set_value('tv', axis_lc[5] - axis_lc[2])
 
         dpg.render_dearpygui_frame()
     dpg.start_dearpygui()
     dpg.destroy_context()
 
 
-def com_server(queue_img, queue_stop, queue_en):  # pure low-level communication with server (on raspberry)
-    if not queue_en.empty():
+def com_server(queue_stop, queue_img):  # pure low-level communication with server (on raspberry)
+
+    while queue_stop.empty():
         client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        client_socket.connect(('127.0.0.1', 8080))
-        while True:
-            client_socket.send(b'image ')
-            data = client_socket.recv(100000)
-            queue_img.empty()
-            queue_img.put(data)
-            # img = open('img.jpg', 'wb')
-            # img.write(data)
-            # img.close()
-    else:
-        while True:
-            time.sleep(1)
+        client_socket.connect(('192.168.1.146', 8080))
+        client_socket.send(b'image ')
+        data = client_socket.recv(3)
+        size = int.from_bytes(data, 'big')
+        data = b''
+        while len(data) < size:
+            data += client_socket.recv(1024)
+        if not queue_img.empty():
+            test = queue_img.get()
+        queue_img.put(data)
+        # img = open('img.jpg', 'wb')
+        # print(len(data))
+        # img.write(data)
+        # img.close()
 
-            if not queue_stop.empty():
-                sys.exit(0)
 
 
-def controller(queue_cont, queue_stop):
+    print('com closed')
+
+
+
+def controller(queue_stop, axis_lc, arrows_lc, buttons_lc):
     pygame.init()
     joystick = pygame.joystick.Joystick(0)
     gamepad_but = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ], np.bool_)
@@ -155,14 +175,17 @@ def controller(queue_cont, queue_stop):
         #     elif i > 8:
         #         gamepad_but[i - 1] = joystick.get_button(i)
         for i in range(6):
-            gamepad_ax[i] = joystick.get_axis(i)
-        # gamepad_ar = joystick.get_hat(0)
+            axis_lc[i] = joystick.get_axis(i)
+        spd = joystick.get_hat(0)
+        if not spd[0] == 0:
+            arrows_lc[0] = spd[0]
+        else:
+            arrows_lc[0] = 0
 
-        if not queue_cont.empty():
-            test = queue_cont.get()
-        # queue_cont.put(gamepad_but)
-        queue_cont.put(gamepad_ax)
-        # queue_cont.put(gamepad_ar)
+        if not spd[1] == 0:
+            arrows_lc[1] = spd[1]
+        else:
+            arrows_lc[1] = 0
 
 
 if __name__ == '__main__':
@@ -171,10 +194,16 @@ if __name__ == '__main__':
     queue_cont_ = multiprocessing.Queue()  # to get gamepad data
     queue_en_ = multiprocessing.Queue()  # enables communication
 
-    p_ser = Process(target=com_server, args=(queue_img_, queue_stop_, queue_en_))
-    p_gui = Process(target=gui, args=(queue_img_, queue_stop_, queue_en_, queue_cont_))
-    p_cont = Process(target=controller, args=(queue_cont_, queue_stop_))
+    ax_gl = multiprocessing.Array('d', [0 for i in range(6)])
+    arr_gl = multiprocessing.Array('i', [0 for i in range(2)])
+    but_gl = multiprocessing.Array('i', [0 for i in range(10)])
+    con_en = multiprocessing.Value('i', 0)
+    stm_gl = multiprocessing.Array('i', [0 for i in range(10)])
+
+    p_serv = Process(target=com_server, args=(queue_stop_, queue_img_))
+    p_gui = Process(target=gui, args=(queue_stop_, queue_img_, ax_gl, arr_gl, but_gl))
+    p_cont = Process(target=controller, args=(queue_stop_, ax_gl, arr_gl, but_gl))
 
     p_gui.start()
-    # p_ser.start()
+    p_serv.start()
     p_cont.start()
