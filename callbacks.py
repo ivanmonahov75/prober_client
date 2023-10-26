@@ -63,3 +63,19 @@ def ir_onoff(sender):
         dpg.set_value('ir', 'IR light on')
 
     ir_state = not ir_state
+
+
+def upper_speed():
+    global speed_mode
+    if speed_mode > 2:
+        speed_mode = 0
+    else:
+        speed_mode += 1
+    dpg.set_value('speed_mode', f'Current speed mode: {speed_modes[speed_mode]}')
+def lower_speed():
+    global speed_mode
+    if speed_mode > 2:
+        speed_mode = 0
+    else:
+        speed_mode -= 1
+    dpg.set_value('speed_mode', f'Current speed mode: {speed_modes[speed_mode]}')

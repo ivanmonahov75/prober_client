@@ -7,12 +7,10 @@ import pygame
 import numpy as np
 import callbacks
 
-mots_state = True
 
-
-def gui(queue_stop, queue_img, axis_lc, arrows_lc, buttons_lc):
+def gui(stop, queue_img, axis_lc, arrows_lc, buttons_lc):
     def stop_proc():
-        queue_stop.put('stop')
+        stop.value = 0
         pygame.quit()
         sys.exit(0)
 
@@ -97,76 +95,78 @@ def gui(queue_stop, queue_img, axis_lc, arrows_lc, buttons_lc):
     dpg.toggle_viewport_fullscreen()
     old_arr = [0, 0]
     while dpg.is_dearpygui_running():
-        img = open('img_new.jpg', 'wb')
+        if con_en.value:
+            img = open('img_new.jpg', 'wb')
 
-        img.write(queue_img.get())
-        img.close()
+            img.write(queue_img.get())
+            img.close()
 
-        try:
-            width, heights, channels, data = dpg.load_image('img_new.jpg')
-        except:
-            width, heights, channels, data = dpg.load_image('img_def.jpg')
-        dpg.set_value("img", data)
+            try:
+                width, heights, channels, data = dpg.load_image('img_new.jpg')
+            except:
+                width, heights, channels, data = dpg.load_image('img_def.jpg')
+            dpg.set_value("img", data)
 
-        if old_arr[0] == 0 and arrows_lc[0] == 1:
-            callbacks.change_light(None)
-        if old_arr[0] == 0 and arrows_lc[0] == -1:
-            callbacks.ir_onoff('ir_but')
+            if old_arr[0] == 0 and arrows_lc[0] == 1:
+                callbacks.change_light(None)
+            if old_arr[0] == 0 and arrows_lc[0] == -1:
+                callbacks.ir_onoff('ir_but')
 
-        if old_arr[1] == 0 and arrows_lc[1] == 1:
-            callbacks.upper_speed(None)
-        if old_arr[1] == 0 and arrows_lc[1] == -1:
-            callbacks.lower_speed(None)
+            if old_arr[1] == 0 and arrows_lc[1] == 1:
+                callbacks.upper_speed()
+            if old_arr[1] == 0 and arrows_lc[1] == -1:
+                callbacks.lower_speed()
 
-        old_arr[0] = arrows_lc[0]
-        old_arr[1] = arrows_lc[1]
+            old_arr[0] = arrows_lc[0]
+            old_arr[1] = arrows_lc[1]
 
-        dpg.set_value('lx', axis_lc[0])
-        dpg.set_value('ly', -axis_lc[1])
-        dpg.set_value('dv', -axis_lc[2])
-        dpg.set_value('rx', axis_lc[3])
-        dpg.set_value('ry', -axis_lc[4])
-        dpg.set_value('uv', axis_lc[5])
-        dpg.set_value('tv', axis_lc[5] - axis_lc[2])
+            dpg.set_value('lx', axis_lc[0])
+            dpg.set_value('ly', -axis_lc[1])
+            dpg.set_value('dv', -axis_lc[2])
+            dpg.set_value('rx', axis_lc[3])
+            dpg.set_value('ry', -axis_lc[4])
+            dpg.set_value('uv', axis_lc[5])
+            dpg.set_value('tv', axis_lc[5] - axis_lc[2])
 
         dpg.render_dearpygui_frame()
     dpg.start_dearpygui()
     dpg.destroy_context()
 
 
-def com_server(queue_stop, queue_img):  # pure low-level communication with server (on raspberry)
+def com_server(stop, queue_img, con_en):  # pure low-level communication with server (on raspberry)
 
-    while queue_stop.empty():
-        client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        client_socket.connect(('192.168.1.146', 8080))
-        client_socket.send(b'image ')
-        data = client_socket.recv(3)
-        size = int.from_bytes(data, 'big')
-        data = b''
-        while len(data) < size:
-            data += client_socket.recv(1024)
-        if not queue_img.empty():
-            test = queue_img.get()
-        queue_img.put(data)
+    while stop.value:
+        if con_en.value:
+            client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            client_socket.connect(('192.168.1.146', 8080))
+            client_socket.send(b'image ')
+            data = client_socket.recv(3)
+            size = int.from_bytes(data, 'big')
+            data = b''
+            while len(data) < size:
+                data += client_socket.recv(1024)
+            if not queue_img.empty():
+                test = queue_img.get()
+            queue_img.put(data)
         # img = open('img.jpg', 'wb')
         # print(len(data))
         # img.write(data)
         # img.close()
 
-
-
     print('com closed')
 
 
-
-def controller(queue_stop, axis_lc, arrows_lc, buttons_lc):
+def controller(stop, axis_lc, arrows_lc, buttons_lc):
     pygame.init()
-    joystick = pygame.joystick.Joystick(0)
-    gamepad_but = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ], np.bool_)
-    gamepad_ax = np.array([0, 0, 0, 0, 0, 0, ], np.float32)
-    gamepad_ar = np.array([0.0], np.int8)
+    while pygame.joystick.get_count() == 0 and stop.value == 1:
+        pass
+    if stop.value:
+        joystick = pygame.joystick.Joystick(0)
+        gamepad_but = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ], np.bool_)
+        gamepad_ax = np.array([0, 0, 0, 0, 0, 0, ], np.float32)
+        gamepad_ar = np.array([0.0], np.int8)
 
-    while queue_stop.empty():
+    while stop.value:
         pygame.event.get()
         # for i in range(11):
         #     if i < 8:
@@ -189,21 +189,21 @@ def controller(queue_stop, axis_lc, arrows_lc, buttons_lc):
 
 if __name__ == '__main__':
     queue_img_ = multiprocessing.Queue()  # to send images
-    queue_stop_ = multiprocessing.Queue()  # for stopping program correctly
     queue_cont_ = multiprocessing.Queue()  # to get gamepad data
     queue_en_ = multiprocessing.Queue()  # enables communication
 
     ax_gl = multiprocessing.Array('d', [0 for i in range(6)])
     arr_gl = multiprocessing.Array('i', [0 for i in range(2)])
     but_gl = multiprocessing.Array('i', [0 for i in range(10)])
-    con_en = multiprocessing.Value('i', 0)
     stm_gl = multiprocessing.Array('i', [0 for i in range(10)])
 
-    p_serv = Process(target=com_server, args=(queue_stop_, queue_img_))
-    p_gui = Process(target=gui, args=(queue_stop_, queue_img_, ax_gl, arr_gl, but_gl))
-    p_cont = Process(target=controller, args=(queue_stop_, ax_gl, arr_gl, but_gl))
+    con_en = multiprocessing.Value('i', 0)
+    stop_ = multiprocessing.Value('i', 1)
 
+    p_serv = Process(target=com_server, args=(stop_, queue_img_, con_en))
+    p_gui = Process(target=gui, args=(stop_, queue_img_, ax_gl, arr_gl, but_gl))
+    p_cont = Process(target=controller, args=(stop_, ax_gl, arr_gl, but_gl))
 
     p_gui.start()
     p_serv.start()
-    # p_cont.start()
+    p_cont.start()
