@@ -133,10 +133,10 @@ def gui(stop, queue_img, axis_lc, arrows_lc, buttons_lc):
     dpg.destroy_context()
 
 
-def com_server(stop, queue_img, con_en):  # pure low-level communication with server (on raspberry)
+def com_server(stop, queue_img, con_en_lc):  # pure low-level communication with server (on raspberry)
 
     while stop.value:
-        if con_en.value:
+        if con_en_lc.value:
             client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             client_socket.connect(('192.168.1.146', 8080))
             client_socket.send(b'image ')
