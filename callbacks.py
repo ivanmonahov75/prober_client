@@ -44,6 +44,20 @@ def change_speed(sender):
     dpg.set_value('speed_mode', f'Current speed mode: {speed_modes[speed_mode]}')
 
 
+def upper_speed(sender):
+    global speed_mode
+    if not speed_mode == 3:
+        speed_mode += 1
+    dpg.set_value('speed_mode', f'Current speed mode: {speed_modes[speed_mode]}')
+
+
+def lower_speed(sender):
+    global speed_mode
+    if not speed_mode == 0:
+        speed_mode -= 1
+    dpg.set_value('speed_mode', f'Current speed mode: {speed_modes[speed_mode]}')
+
+
 def change_light(sender):
     global light_mode
     if light_mode > 2:

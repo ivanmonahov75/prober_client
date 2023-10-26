@@ -23,7 +23,7 @@ def gui(queue_stop, queue_img, axis_lc, arrows_lc, buttons_lc):
         default_font = dpg.add_font("ProggyClean.ttf", 25)
 
     dpg.bind_font(default_font)
-    width, heights, channels, data = dpg.load_image('img_def.jpg')
+    width, heights, channels, data = dpg.load_image('img_def1.jpg')
     with dpg.texture_registry():
         dpg.add_dynamic_texture(width, heights, data, tag='img')
 
@@ -203,7 +203,6 @@ if __name__ == '__main__':
     p_gui = Process(target=gui, args=(queue_stop_, queue_img_, ax_gl, arr_gl, but_gl))
     p_cont = Process(target=controller, args=(queue_stop_, ax_gl, arr_gl, but_gl))
 
-
     p_gui.start()
     p_serv.start()
-    # p_cont.start()
+    p_cont.start()
