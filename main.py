@@ -1,14 +1,19 @@
-import multiprocessing
+import multiprocessing as mp
 import socket
 import sys
+import time
 from multiprocessing import Process
 import dearpygui.dearpygui as dpg
 import pygame
 import numpy as np
 import callbacks
+import struct
+
+last_con = False
+sen_scale = 0.3
 
 
-def gui(stop, queue_img, axis_lc, arrows_lc, buttons_lc):
+def gui(stop, queue_img, axis_lc, arrows_lc, buttons_lc, con_en, stmg):
     def stop_proc():
         stop.value = 0
         pygame.quit()
@@ -72,18 +77,18 @@ def gui(stop, queue_img, axis_lc, arrows_lc, buttons_lc):
             dpg.add_text(default_value='Pressure (KPa):')
             dpg.add_text(default_value='Depth (meters):')
         with dpg.group(pos=(420, 750)):  # buttons
-            dpg.add_button(label='Enable', callback=callbacks.change_connection)
+            dpg.add_button(label='Enable', callback=callbacks.change_connection, tag='con')
             dpg.add_button(label="Turn off motors", tag='mots_on_off', callback=callbacks.mots_onoff)
             dpg.add_button(label="Change speed mode", callback=callbacks.change_speed)
             dpg.add_button(label="Change light mode", callback=callbacks.change_light)
             dpg.add_button(label="Turn IR on", callback=callbacks.ir_onoff, tag='ir_but')
             dpg.add_text(default_value='')
-            dpg.add_text(default_value='69%')
-            dpg.add_text(default_value='16.3v')
-            dpg.add_text(default_value='23 °C')
-            dpg.add_text(default_value='18 °C')
-            dpg.add_text(default_value='143 KPa')
-            dpg.add_text(default_value='1.4 Meters')
+            dpg.add_text(default_value='N/A', tag="pbat_val")
+            dpg.add_text(default_value='N/A', tag='vbat_val')
+            dpg.add_text(default_value='N/A °C', tag='itemp_val')
+            dpg.add_text(default_value='N/A °C', tag='otemp_val')
+            dpg.add_text(default_value='N/A KPa', tag='p_val')
+            dpg.add_text(default_value='0 Meters', tag='d_val')
 
     with dpg.window(tag='low_controls', label='Low controls', pos=(0, 1440), width=2560, height=160, no_resize=True):
         with dpg.group(horizontal=True):
@@ -92,62 +97,98 @@ def gui(stop, queue_img, axis_lc, arrows_lc, buttons_lc):
     dpg.create_viewport(title='Custom Title', width=2560, height=1600)
     dpg.setup_dearpygui()
     dpg.show_viewport()
-    dpg.toggle_viewport_fullscreen()
+    # dpg.toggle_viewport_fullscreen()
     old_arr = [0, 0]
     while dpg.is_dearpygui_running():
-        if con_en.value:
-            img = open('img_new.jpg', 'wb')
+        # image processing
+        # if con_en.value:
+        #     img = open('img_new.jpg', 'wb')
+        #
+        #     img.write(queue_img.get())
+        #     img.close()
+        #
+        #     try:
+        #         width, heights, channels, data = dpg.load_image('img_new.jpg')
+        #     except:
+        #         width, heights, channels, data = dpg.load_image('img_def.jpg')
+        #     dpg.set_value("img", data)
 
-            img.write(queue_img.get())
-            img.close()
+        # gamepad processing
+        if old_arr[0] == 0 and arrows_lc[0] == 1:
+            callbacks.change_light(None)
+        if old_arr[0] == 0 and arrows_lc[0] == -1:
+            callbacks.ir_onoff('ir_but')
 
-            try:
-                width, heights, channels, data = dpg.load_image('img_new.jpg')
-            except:
-                width, heights, channels, data = dpg.load_image('img_def.jpg')
-            dpg.set_value("img", data)
+        if old_arr[1] == 0 and arrows_lc[1] == 1:
+            callbacks.upper_speed()
+        if old_arr[1] == 0 and arrows_lc[1] == -1:
+            callbacks.lower_speed()
 
-            if old_arr[0] == 0 and arrows_lc[0] == 1:
-                callbacks.change_light(None)
-            if old_arr[0] == 0 and arrows_lc[0] == -1:
-                callbacks.ir_onoff('ir_but')
+        old_arr[0] = arrows_lc[0]
+        old_arr[1] = arrows_lc[1]
 
-            if old_arr[1] == 0 and arrows_lc[1] == 1:
-                callbacks.upper_speed()
-            if old_arr[1] == 0 and arrows_lc[1] == -1:
-                callbacks.lower_speed()
+        dpg.set_value('lx', axis_lc[0])
+        dpg.set_value('ly', -axis_lc[1])
+        dpg.set_value('dv', -axis_lc[2])
+        dpg.set_value('rx', axis_lc[3])
+        dpg.set_value('ry', -axis_lc[4])
+        dpg.set_value('uv', axis_lc[5])
+        dpg.set_value('tv', axis_lc[5] - axis_lc[2])
 
-            old_arr[0] = arrows_lc[0]
-            old_arr[1] = arrows_lc[1]
+        # changing state processing
+        global last_con
+        if last_con != callbacks.connection_state:
+            last_con = callbacks.connection_state
+            if callbacks.connection_state:
+                con_en.value = 1
+            else:
+                con_en.value = 0
 
-            dpg.set_value('lx', axis_lc[0])
-            dpg.set_value('ly', -axis_lc[1])
-            dpg.set_value('dv', -axis_lc[2])
-            dpg.set_value('rx', axis_lc[3])
-            dpg.set_value('ry', -axis_lc[4])
-            dpg.set_value('uv', axis_lc[5])
-            dpg.set_value('tv', axis_lc[5] - axis_lc[2])
+        dpg.set_value('p_val', f'{stmg[1]} KPa')
+        dpg.set_value('itemp_val', f'{stmg[0]}°C')
 
         dpg.render_dearpygui_frame()
     dpg.start_dearpygui()
     dpg.destroy_context()
 
 
-def com_server(stop, queue_img, con_en_lc):  # pure low-level communication with server (on raspberry)
+def com_server(stop, queue_img, con_en_lc, from_stm, to_stm):  # pure low-level communication with server (on raspberry)
 
     while stop.value:
         if con_en_lc.value:
             client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            client_socket.connect(('192.168.1.146', 8080))
-            client_socket.send(b'image ')
-            data = client_socket.recv(3)
-            size = int.from_bytes(data, 'big')
-            data = b''
-            while len(data) < size:
-                data += client_socket.recv(1024)
-            if not queue_img.empty():
-                test = queue_img.get()
-            queue_img.put(data)
+            client_socket.connect(('127.0.0.1', 8080))
+
+            # client_socket.send(b'img')
+            # data = client_socket.recv(3)
+            # size = int.from_bytes(data, 'big')
+            # data = b''
+            # while len(data) < size:
+            #     data += client_socket.recv(1024)
+            # if not queue_img.empty():
+            #     test = queue_img.get()
+            # queue_img.put(data)
+
+            client_socket.send(b'low')
+            for i in to_stm:
+                client_socket.send(int.to_bytes(i, 2, 'little'))
+            data = client_socket.recv(4)
+            from_stm[0] = round(struct.unpack('f', data)[0], 3)
+            data = client_socket.recv(4)
+            from_stm[1] = struct.unpack('i', data)[0]
+            client_socket.close()
+            print(from_stm[0:2])
+
+            # client_socket.send(b'img')
+            # data = client_socket.recv(3)
+            # size = int.from_bytes(data, 'big')
+            # data = b''
+            # while len(data) < size:
+            #     data += client_socket.recv(1024)
+            # if not queue_img.empty():
+            #     test = queue_img.get()
+            # queue_img.put(data)
+
         # img = open('img.jpg', 'wb')
         # print(len(data))
         # img.write(data)
@@ -156,7 +197,7 @@ def com_server(stop, queue_img, con_en_lc):  # pure low-level communication with
     print('com closed')
 
 
-def controller(stop, axis_lc, arrows_lc, buttons_lc):
+def controller(stop, axis_lc, arrows_lc, buttons_lc, to_stm):
     pygame.init()
     while pygame.joystick.get_count() == 0 and stop.value == 1:
         pass
@@ -175,6 +216,16 @@ def controller(stop, axis_lc, arrows_lc, buttons_lc):
         #         gamepad_but[i - 1] = joystick.get_button(i)
         for i in range(6):
             axis_lc[i] = joystick.get_axis(i)
+
+        # for horizontal motors
+        to_stm[0:2] = (
+        round((-axis_lc[1] + axis_lc[0]) * 500 * 0.7*sen_scale + 1500), round((-axis_lc[1] - axis_lc[0]) * 500 * 0.7*sen_scale + 1500))
+        # for vertical motors
+        to_stm[2:4] = (
+        round((-axis_lc[4] - axis_lc[3]) * 500 * 0.7*sen_scale + 1500), round((-axis_lc[4] + axis_lc[3]) * 500 * 0.7*sen_scale + 1500))
+        to_stm[4:6] = (
+        round((axis_lc[4] - axis_lc[3]) * 500 * 0.7*sen_scale + 1500), round((axis_lc[4] + axis_lc[3]) * 500 * 0.7*sen_scale + 1500))
+
         spd = joystick.get_hat(0)
         if not spd[0] == 0:
             arrows_lc[0] = spd[0]
@@ -188,22 +239,26 @@ def controller(stop, axis_lc, arrows_lc, buttons_lc):
 
 
 if __name__ == '__main__':
-    queue_img_ = multiprocessing.Queue()  # to send images
-    queue_cont_ = multiprocessing.Queue()  # to get gamepad data
-    queue_en_ = multiprocessing.Queue()  # enables communication
+    queue_img_ = mp.Queue()  # to send images
 
-    ax_gl = multiprocessing.Array('d', [0 for i in range(6)])
-    arr_gl = multiprocessing.Array('i', [0 for i in range(2)])
-    but_gl = multiprocessing.Array('i', [0 for i in range(10)])
-    stm_gl = multiprocessing.Array('i', [0 for i in range(10)])
+    ax_gl = mp.Array('d', [0 for i in range(6)])
+    arr_gl = mp.Array('i', [0 for i in range(2)])
+    but_gl = mp.Array('i', [0 for i in range(10)])
 
-    con_en = multiprocessing.Value('i', 0)
-    stop_ = multiprocessing.Value('i', 1)
+    stm_gl = mp.Array('d', [0 for i in range(10)])
+    to_stm_gl = mp.Array('i', [1500 for i in range(10)])
 
-    p_serv = Process(target=com_server, args=(stop_, queue_img_, con_en))
-    p_gui = Process(target=gui, args=(stop_, queue_img_, ax_gl, arr_gl, but_gl))
-    p_cont = Process(target=controller, args=(stop_, ax_gl, arr_gl, but_gl))
+    con_en_ = mp.Value('i', 0)
+    _stop = mp.Value('i', 1)
+
+    p_serv = Process(target=com_server, args=(_stop, queue_img_, con_en_, stm_gl, to_stm_gl))
+    p_gui = Process(target=gui, args=(_stop, queue_img_, ax_gl, arr_gl, but_gl, con_en_, stm_gl))
+    p_cont = Process(target=controller, args=(_stop, ax_gl, arr_gl, but_gl, to_stm_gl))
 
     p_gui.start()
     p_serv.start()
     p_cont.start()
+
+    while _stop.value == 1:
+        _stop.value = int(input())
+        exit(0)
