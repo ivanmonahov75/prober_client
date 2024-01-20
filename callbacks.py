@@ -4,7 +4,7 @@ mots_state = False
 connection_state = False
 ir_state = False
 
-speed_modes = {0: 'Minimum', 1: 'Low', 2: 'Medium', 3: 'Full'}
+speed_modes = {0: 'Low', 1: 'Medium', 2: 'Full'}
 speed_mode = 0
 
 light_modes = {0: 'Low', 1: 'Medium', 2: 'High', 3: 'Emergency'}
@@ -37,7 +37,7 @@ def change_connection(sender):
 
 def change_speed(sender):
     global speed_mode
-    if speed_mode > 2:
+    if speed_mode > 1:
         speed_mode = 0
     else:
         speed_mode += 1
@@ -67,15 +67,15 @@ def ir_onoff(sender):
 
 def upper_speed():
     global speed_mode
-    if speed_mode > 2:
-        speed_mode = 0
+    if speed_mode > 1:
+        pass
     else:
         speed_mode += 1
     dpg.set_value('speed_mode', f'Current speed mode: {speed_modes[speed_mode]}')
 def lower_speed():
     global speed_mode
-    if speed_mode > 2:
-        speed_mode = 0
+    if speed_mode == 0:
+        pass
     else:
         speed_mode -= 1
     dpg.set_value('speed_mode', f'Current speed mode: {speed_modes[speed_mode]}')
